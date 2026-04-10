@@ -214,7 +214,7 @@ export default function SettingsScreen() {
         
         <TouchableOpacity 
           style={styles.settingCard}
-          onPress={() => Alert.alert('Acerca de', 'Trive v1.0.0\nPlataforma de viajes compartidos')}
+          onPress={() => navigation.navigate('AboutTrive' as never)}
           activeOpacity={0.7}
         >
           <View style={styles.settingHeader}>
@@ -231,7 +231,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity 
           style={styles.settingCard}
-          onPress={() => Alert.alert('Términos de Servicio', 'Lee nuestros términos y condiciones')}
+          onPress={() => navigation.navigate('TermsOfService' as never)}
           activeOpacity={0.7}
         >
           <View style={styles.settingHeader}>
@@ -248,7 +248,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity 
           style={styles.settingCard}
-          onPress={() => Alert.alert('Privacidad', 'Lee nuestra política de privacidad')}
+          onPress={() => navigation.navigate('PrivacyPolicy' as never)}
           activeOpacity={0.7}
         >
           <View style={styles.settingHeader}>
@@ -265,7 +265,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity 
           style={styles.settingCard}
-          onPress={() => Alert.alert('Soporte', 'Ponte en contacto con nuestro equipo')}
+          onPress={() => navigation.navigate('Support' as never)}
           activeOpacity={0.7}
         >
           <View style={styles.settingHeader}>

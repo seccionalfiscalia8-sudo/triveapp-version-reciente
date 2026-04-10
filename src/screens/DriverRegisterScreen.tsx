@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
+  FlatList,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -15,6 +17,14 @@ import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useRoutes } from '../hooks/useRoutes'
 import { useAppStore } from '../store/useAppStore'
+import { supabase } from '../services/supabase'
+
+const VEHICLE_TYPES = [
+  { id: 'auto', name: 'Auto', maxSeats: 4, icon: 'car-sport' as const },
+  { id: 'taxi', name: 'Taxi', maxSeats: 4, icon: 'car' as const },
+  { id: 'busetica', name: 'Busetica', maxSeats: 15, icon: 'bus' as const },
+  { id: 'buseta', name: 'Buseta', maxSeats: 70, icon: 'bus' as const },
+]
 
 export default function DriverRegisterScreen() {
   const insets = useSafeAreaInsets()
@@ -24,25 +34,80 @@ export default function DriverRegisterScreen() {
 
   // Ruta campos
   const [origin, setOrigin] = useState('')
+  const [originZone, setOriginZone] = useState('')
   const [destination, setDestination] = useState('')
+  const [destinationZone, setDestinationZone] = useState('')
   const [departureTime, setDepartureTime] = useState('')
   const [arrivalTime, setArrivalTime] = useState('')
+  const [vehicleTypeId, setVehicleTypeId] = useState('')
   const [totalSeats, setTotalSeats] = useState('')
   const [pricePerSeat, setPricePerSeat] = useState('')
+  const [showVehicleTypePicker, setShowVehicleTypePicker] = useState(false)
 
-  // Vehículo campos
-  const [vehicleMake, setVehicleMake] = useState('')
-  const [vehicleYear, setVehicleYear] = useState('')
-  const [vehiclePlate, setVehiclePlate] = useState('')
-  const [vehicleColor, setVehicleColor] = useState('')
+  // Vehículo datos
+  const [vehicleData, setVehicleData] = useState<any>(null)
+  const [vehicleLoading, setVehicleLoading] = useState(true)
+
+  const selectedVehicleType = VEHICLE_TYPES.find((v) => v.id === vehicleTypeId)
+  const maxSeats = selectedVehicleType?.maxSeats || 0
+
+  // Manejar cambio de asientos con validación automática
+  const handleTotalSeatsChange = (text: string) => {
+    if (!text) {
+      setTotalSeats('')
+      return
+    }
+    const num = parseInt(text, 10)
+    if (num > maxSeats) {
+      setTotalSeats(String(maxSeats))
+    } else if (num < 1 && text !== '') {
+      setTotalSeats('')
+    } else {
+      setTotalSeats(text)
+    }
+  }
+
+  // Cargar datos del vehículo al montar
+  useEffect(() => {
+    loadVehicleData()
+  }, [user?.id])
+
+  const loadVehicleData = async () => {
+    try {
+      setVehicleLoading(true)
+      const { data, error } = await supabase
+        .from('routes')
+        .select('vehicle_make, vehicle_model, vehicle_year, vehicle_plate, vehicle_color')
+        .eq('driver_id', user?.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (data) {
+        setVehicleData(data)
+      }
+    } catch (err) {
+      console.log('No hay rutas previas', err)
+    } finally {
+      setVehicleLoading(false)
+    }
+  }
 
   const validateForm = () => {
     if (!origin.trim()) {
-      Alert.alert('Error', 'Por favor ingresa el origen')
+      Alert.alert('Error', 'Por favor ingresa la ciudad de origen')
+      return false
+    }
+    if (!originZone.trim()) {
+      Alert.alert('Error', 'Por favor ingresa la zona de salida')
       return false
     }
     if (!destination.trim()) {
-      Alert.alert('Error', 'Por favor ingresa el destino')
+      Alert.alert('Error', 'Por favor ingresa la ciudad de destino')
+      return false
+    }
+    if (!destinationZone.trim()) {
+      Alert.alert('Error', 'Por favor ingresa la zona de llegada')
       return false
     }
     if (!departureTime.trim()) {
@@ -53,28 +118,20 @@ export default function DriverRegisterScreen() {
       Alert.alert('Error', 'Por favor ingresa la hora de llegada (ej: 10:30)')
       return false
     }
-    if (!totalSeats.trim() || parseInt(totalSeats) < 1 || parseInt(totalSeats) > 8) {
-      Alert.alert('Error', 'Por favor ingresa asientos válidos (1-8)')
+    if (!vehicleTypeId) {
+      Alert.alert('Error', 'Por favor selecciona un tipo de vehículo')
+      return false
+    }
+    if (!totalSeats.trim() || parseInt(totalSeats) < 1 || parseInt(totalSeats) > maxSeats) {
+      Alert.alert('Error', `Por favor ingresa asientos válidos (1-${maxSeats})`)
       return false
     }
     if (!pricePerSeat.trim() || parseFloat(pricePerSeat) <= 0) {
       Alert.alert('Error', 'Por favor ingresa un precio válido')
       return false
     }
-    if (!vehicleMake.trim()) {
-      Alert.alert('Error', 'Por favor ingresa la marca del vehículo')
-      return false
-    }
-    if (!vehicleYear.trim() || vehicleYear.length !== 4) {
-      Alert.alert('Error', 'Por favor ingresa un año válido (ej: 2020)')
-      return false
-    }
-    if (!vehiclePlate.trim()) {
-      Alert.alert('Error', 'Por favor ingresa la placa del vehículo')
-      return false
-    }
-    if (!vehicleColor.trim()) {
-      Alert.alert('Error', 'Por favor ingresa el color del vehículo')
+    if (!vehicleData) {
+      Alert.alert('Error', 'Por favor agrega información de tu vehículo primero en "Mi Vehículo"')
       return false
     }
     return true
@@ -93,18 +150,18 @@ export default function DriverRegisterScreen() {
 
       const routeData = {
         driver_id: user.id,
-        origin: origin.trim(),
-        destination: destination.trim(),
+        origin: `${origin.trim()} - ${originZone.trim()}`,
+        destination: `${destination.trim()} - ${destinationZone.trim()}`,
         departure_time: `${dateStr}T${departureTime}:00`,
         arrival_time: `${dateStr}T${arrivalTime}:00`,
         price_per_seat: parseFloat(pricePerSeat),
         total_seats: parseInt(totalSeats),
         available_seats: parseInt(totalSeats),
-        vehicle_make: vehicleMake.trim(),
-        vehicle_model: '',
-        vehicle_year: parseInt(vehicleYear),
-        vehicle_plate: vehiclePlate.trim().toUpperCase(),
-        vehicle_color: vehicleColor.trim(),
+        vehicle_make: vehicleData.vehicle_make,
+        vehicle_model: vehicleData.vehicle_model || '',
+        vehicle_year: vehicleData.vehicle_year,
+        vehicle_plate: vehicleData.vehicle_plate,
+        vehicle_color: vehicleData.vehicle_color,
         status: 'scheduled',
       }
 
@@ -125,15 +182,14 @@ export default function DriverRegisterScreen() {
 
       // Limpiar formulario
       setOrigin('')
+      setOriginZone('')
       setDestination('')
+      setDestinationZone('')
       setDepartureTime('')
       setArrivalTime('')
+      setVehicleTypeId('')
       setTotalSeats('')
       setPricePerSeat('')
-      setVehicleMake('')
-      setVehicleYear('')
-      setVehiclePlate('')
-      setVehicleColor('')
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Error al crear la ruta. Intenta de nuevo.')
     }
@@ -160,11 +216,11 @@ export default function DriverRegisterScreen() {
         {/* Intro Card */}
         <View style={styles.introCard}>
           <View style={styles.introIcon}>
-            <Ionicons name="car" size={32} color={COLORS.textInverse} />
+            <Ionicons name="checkmark-circle" size={32} color={COLORS.success} />
           </View>
-          <Text style={styles.introTitle}>Eres un nuevo conductor</Text>
+          <Text style={styles.introTitle}>Conductor Verificado</Text>
           <Text style={styles.introText}>
-            Completa todos los datos para que los pasajeros confíen en ti
+            Publica tus rutas y conecta con pasajeros confiables
           </Text>
         </View>
 
@@ -181,7 +237,7 @@ export default function DriverRegisterScreen() {
             <Ionicons name="location" size={20} color={COLORS.primary} />
             <TextInput
               style={styles.input}
-              placeholder="Origen (ciudad/sector)"
+              placeholder="Ciudad origen"
               placeholderTextColor={COLORS.textTertiary}
               value={origin}
               onChangeText={setOrigin}
@@ -190,13 +246,37 @@ export default function DriverRegisterScreen() {
           </View>
 
           <View style={styles.inputContainer}>
+            <Ionicons name="business" size={20} color={COLORS.primary} />
+            <TextInput
+              style={styles.input}
+              placeholder="Zona/punto de salida"
+              placeholderTextColor={COLORS.textTertiary}
+              value={originZone}
+              onChangeText={setOriginZone}
+              editable={!routeLoading}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
             <Ionicons name="navigate-circle" size={20} color={COLORS.primary} />
             <TextInput
               style={styles.input}
-              placeholder="Destino (ciudad/sector)"
+              placeholder="Ciudad destino"
               placeholderTextColor={COLORS.textTertiary}
               value={destination}
               onChangeText={setDestination}
+              editable={!routeLoading}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="business" size={20} color={COLORS.primary} />
+            <TextInput
+              style={styles.input}
+              placeholder="Zona/punto de llegada"
+              placeholderTextColor={COLORS.textTertiary}
+              value={destinationZone}
+              onChangeText={setDestinationZone}
               editable={!routeLoading}
             />
           </View>
@@ -206,7 +286,7 @@ export default function DriverRegisterScreen() {
               <Ionicons name="time" size={20} color={COLORS.accent} />
               <TextInput
                 style={styles.input}
-                placeholder="Salida (HH:MM)"
+                placeholder="HH:MM"
                 placeholderTextColor={COLORS.textTertiary}
                 value={departureTime}
                 onChangeText={setDepartureTime}
@@ -219,7 +299,7 @@ export default function DriverRegisterScreen() {
               <Ionicons name="time" size={20} color={COLORS.accent} />
               <TextInput
                 style={styles.input}
-                placeholder="Llegada (HH:MM)"
+                placeholder="HH:MM"
                 placeholderTextColor={COLORS.textTertiary}
                 value={arrivalTime}
                 onChangeText={setArrivalTime}
@@ -228,6 +308,35 @@ export default function DriverRegisterScreen() {
               />
             </View>
           </View>
+        </View>
+
+        {/* VEHICLE TYPE */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="car" size={20} color={COLORS.primary} />
+            </View>
+            <Text style={styles.sectionTitle}>Tipo de vehículo</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.vehicleTypeSelector}
+            onPress={() => setShowVehicleTypePicker(true)}
+          >
+            <Ionicons name="car-sport" size={20} color={COLORS.primary} />
+            <Text style={[styles.vehicleTypeSelectorText, !vehicleTypeId && { color: COLORS.textTertiary }]}>
+              {selectedVehicleType ? selectedVehicleType.name : 'Selecciona un tipo'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          {vehicleTypeId && (
+            <View style={styles.vehicleTypeInfo}>
+              <Text style={styles.vehicleTypeInfoText}>
+                Capacidad: hasta {maxSeats} pasajeros
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* SEATS & PRICE */}
@@ -244,13 +353,13 @@ export default function DriverRegisterScreen() {
               <Ionicons name="people" size={20} color={COLORS.accent} />
               <TextInput
                 style={styles.input}
-                placeholder="Total asientos"
+                placeholder={vehicleTypeId ? `Hasta ${maxSeats}` : 'Selecciona tipo'}
                 placeholderTextColor={COLORS.textTertiary}
                 value={totalSeats}
-                onChangeText={setTotalSeats}
+                onChangeText={handleTotalSeatsChange}
                 keyboardType="numeric"
-                maxLength={1}
-                editable={!routeLoading}
+                maxLength={`${maxSeats}`.length}
+                editable={!routeLoading && !!vehicleTypeId}
               />
             </View>
 
@@ -258,7 +367,7 @@ export default function DriverRegisterScreen() {
               <Ionicons name="cash" size={20} color={COLORS.accent} />
               <TextInput
                 style={styles.input}
-                placeholder="Precio por asiento"
+                placeholder="Precio"
                 placeholderTextColor={COLORS.textTertiary}
                 value={pricePerSeat}
                 onChangeText={setPricePerSeat}
@@ -300,56 +409,64 @@ export default function DriverRegisterScreen() {
             <Text style={styles.sectionTitle}>Datos del vehículo</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="car-sport" size={20} color={COLORS.accent} />
-            <TextInput
-              style={styles.input}
-              placeholder="Marca (ej: Toyota, Chevrolet)"
-              placeholderTextColor={COLORS.textTertiary}
-              value={vehicleMake}
-              onChangeText={setVehicleMake}
-              editable={!routeLoading}
-            />
-          </View>
+          {vehicleLoading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          ) : vehicleData ? (
+            <View style={styles.vehicleInfoBox}>
+              <View style={styles.vehicleInfoRow}>
+                <View style={styles.vehicleInfoLeft}>
+                  <Ionicons name="car-sport" size={20} color={COLORS.primary} />
+                  <Text style={styles.vehicleInfoLabel}>Marca</Text>
+                </View>
+                <Text style={styles.vehicleInfoValue}>{vehicleData.vehicle_make}</Text>
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="calendar" size={20} color={COLORS.accent} />
-            <TextInput
-              style={styles.input}
-              placeholder="Año (ej: 2020)"
-              placeholderTextColor={COLORS.textTertiary}
-              value={vehicleYear}
-              onChangeText={setVehicleYear}
-              keyboardType="numeric"
-              maxLength={4}
-              editable={!routeLoading}
-            />
-          </View>
+              <View style={styles.vehicleInfoDivider} />
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="layers" size={20} color={COLORS.accent} />
-            <TextInput
-              style={styles.input}
-              placeholder="Placa (ej: PTX-234)"
-              placeholderTextColor={COLORS.textTertiary}
-              value={vehiclePlate}
-              onChangeText={setVehiclePlate}
-              autoCapitalize="characters"
-              editable={!routeLoading}
-            />
-          </View>
+              <View style={styles.vehicleInfoRow}>
+                <View style={styles.vehicleInfoLeft}>
+                  <Ionicons name="calendar" size={20} color={COLORS.primary} />
+                  <Text style={styles.vehicleInfoLabel}>Año</Text>
+                </View>
+                <Text style={styles.vehicleInfoValue}>{vehicleData.vehicle_year}</Text>
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="color-palette" size={20} color={COLORS.accent} />
-            <TextInput
-              style={styles.input}
-              placeholder="Color (ej: Blanco, Negro)"
-              placeholderTextColor={COLORS.textTertiary}
-              value={vehicleColor}
-              onChangeText={setVehicleColor}
-              editable={!routeLoading}
-            />
-          </View>
+              <View style={styles.vehicleInfoDivider} />
+
+              <View style={styles.vehicleInfoRow}>
+                <View style={styles.vehicleInfoLeft}>
+                  <Ionicons name="layers" size={20} color={COLORS.primary} />
+                  <Text style={styles.vehicleInfoLabel}>Placa</Text>
+                </View>
+                <Text style={[styles.vehicleInfoValue, styles.plateBadge]}>{vehicleData.vehicle_plate}</Text>
+              </View>
+
+              <View style={styles.vehicleInfoDivider} />
+
+              <View style={styles.vehicleInfoRow}>
+                <View style={styles.vehicleInfoLeft}>
+                  <Ionicons name="color-palette" size={20} color={COLORS.primary} />
+                  <Text style={styles.vehicleInfoLabel}>Color</Text>
+                </View>
+                <Text style={styles.vehicleInfoValue}>{vehicleData.vehicle_color}</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptyVehicleBox}>
+              <Ionicons name="alert-circle" size={32} color={COLORS.accent} />
+              <Text style={styles.emptyVehicleTitle}>Sin información de vehículo</Text>
+              <Text style={styles.emptyVehicleText}>
+                Completa los datos de tu vehículo en "Mi Vehículo" primero
+              </Text>
+              <TouchableOpacity
+                style={styles.editVehicleButton}
+                onPress={() => navigation.navigate('VehicleInfo' as never)}
+              >
+                <Ionicons name="pencil" size={16} color="white" />
+                <Text style={styles.editVehicleButtonText}>Ir a Mi Vehículo</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Info Box */}
@@ -390,6 +507,68 @@ export default function DriverRegisterScreen() {
         >
           <Text style={styles.cancelBtnText}>Cancelar</Text>
         </TouchableOpacity>
+
+        {/* Vehicle Type Picker Modal */}
+        <Modal
+          visible={showVehicleTypePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowVehicleTypePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Selecciona tipo de vehículo</Text>
+                <TouchableOpacity onPress={() => setShowVehicleTypePicker(false)}>
+                  <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <FlatList
+                data={VEHICLE_TYPES}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.vehicleTypeOption,
+                      vehicleTypeId === item.id && styles.vehicleTypeOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setVehicleTypeId(item.id)
+                      setTotalSeats('')
+                      setShowVehicleTypePicker(false)
+                    }}
+                  >
+                    <View style={styles.vehicleTypeOptionContent}>
+                      <Ionicons
+                        name={item.icon}
+                        size={24}
+                        color={vehicleTypeId === item.id ? COLORS.primary : COLORS.textSecondary}
+                      />
+                      <View style={styles.vehicleTypeOptionText}>
+                        <Text
+                          style={[
+                            styles.vehicleTypeOptionName,
+                            vehicleTypeId === item.id && styles.vehicleTypeOptionNameSelected,
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text style={styles.vehicleTypeOptionCapacity}>
+                          Hasta {item.maxSeats} pasajeros
+                        </Text>
+                      </View>
+                    </View>
+                    {vehicleTypeId === item.id && (
+                      <Ionicons name="checkmark" size={24} color={COLORS.primary} />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   )
@@ -626,5 +805,184 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
+  },
+
+  // Vehicle Info Box
+  vehicleInfoBox: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...SHADOWS.sm,
+  },
+  vehicleInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+  },
+  vehicleInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  vehicleInfoLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  vehicleInfoValue: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  plateBadge: {
+    backgroundColor: COLORS.primary + '20',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+    letterSpacing: 2,
+  },
+  vehicleInfoDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+  },
+
+  // Empty Vehicle Box
+  emptyVehicleBox: {
+    backgroundColor: COLORS.accentLight + '20',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.accent + '40',
+    borderStyle: 'dashed',
+  },
+  emptyVehicleTitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.accent,
+    fontWeight: '600',
+    marginTop: SPACING.md,
+  },
+  emptyVehicleText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: SPACING.xs,
+  },
+  editVehicleButton: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginTop: SPACING.md,
+  },
+  editVehicleButtonText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textInverse,
+    fontWeight: '600',
+  },
+
+  // Vehicle Type Selector
+  vehicleTypeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface + 'F8',
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.lg,
+    height: 52,
+    marginBottom: SPACING.md,
+    gap: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight + '99',
+    ...SHADOWS.md,
+    borderTopColor: COLORS.shadowWhiteLight,
+    borderTopWidth: 1.5,
+    borderLeftColor: COLORS.shadowWhiteDark,
+    borderLeftWidth: 1,
+  },
+  vehicleTypeSelectorText: {
+    flex: 1,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+  },
+  vehicleTypeInfo: {
+    backgroundColor: COLORS.primary + '10',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    marginTop: SPACING.sm,
+  },
+  vehicleTypeInfoText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingBottom: SPACING.lg,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  modalTitle: {
+    ...TYPOGRAPHY.h4,
+    color: COLORS.textPrimary,
+  },
+  vehicleTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  vehicleTypeOptionSelected: {
+    backgroundColor: COLORS.primary + '10',
+  },
+  vehicleTypeOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    flex: 1,
+  },
+  vehicleTypeOptionText: {
+    flex: 1,
+  },
+  vehicleTypeOptionName: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  vehicleTypeOptionNameSelected: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  vehicleTypeOptionCapacity: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
   },
 })

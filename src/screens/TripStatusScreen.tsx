@@ -10,13 +10,17 @@ import { useBookings } from '../hooks/useBookings'
 import Toast from '../components/Toast'
 
 export default function TripStatusScreen() {
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
   const { selectedRoute, selectedSeat, user } = useAppStore()
   const { getRouteBookings, loading, cancelBooking } = useBookings()
   const [bookings, setBookings] = useState<any[]>([])
   const [cancelLoading, setCancelLoading] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [toastConfig, setToastConfig] = useState({ visible: false, message: '', type: 'info' as const })
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean
+    message: string
+    type: 'success' | 'error' | 'info' | 'warning'
+  }>({ visible: false, message: '', type: 'info' })
   const [userBooking, setUserBooking] = useState<any>(null)
 
   useEffect(() => {

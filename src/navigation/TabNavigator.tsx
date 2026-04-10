@@ -38,7 +38,6 @@ export default function TabNavigator() {
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
           backgroundColor: COLORS.surface,
-          borderTopColor: COLORS.borderLight,
           borderTopWidth: 1.5,
           height: 65,
           paddingBottom: SPACING.md,

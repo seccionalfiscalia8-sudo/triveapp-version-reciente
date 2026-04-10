@@ -23,7 +23,7 @@ const getGreeting = () => {
 }
 
 export default function HomeScreen() {
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
   const [transportType, setTransportType] = useState<'car' | 'taxi' | 'bus' | 'bike'>('car')
   const [destination, setDestination] = useState('')
   const balance = useAppStore((state) => state.balance)
@@ -209,8 +209,8 @@ export default function HomeScreen() {
             style={styles.quickActionItem}
             onPress={() => navigation.navigate('ScheduledTrips' as never)}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.primary + '20' }]}>
-              <Ionicons name="calendar-check" size={18} color={COLORS.primary} />
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.primary + '20' }]}> 
+              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
             </View>
             <Text style={styles.quickActionText} numberOfLines={1}>Mis viajes</Text>
           </TouchableOpacity>

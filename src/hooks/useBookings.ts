@@ -50,7 +50,7 @@ export const useBookings = () => {
         // Manejar error de asiento ya reservado
         if (bookingError.code === '23505' || bookingError.message.includes('unique')) {
           const customError = new Error('Este asiento ya fue reservado. Por favor selecciona otro.');
-          customError.code = 'SEAT_ALREADY_RESERVED';
+          ;(customError as any).code = 'SEAT_ALREADY_RESERVED';
           throw customError;
         }
         throw bookingError;
@@ -66,10 +66,25 @@ export const useBookings = () => {
 
       if (updateError) {
         // Fallback: manually update if RPC doesn't exist
-        await supabase
+        const { data: routeData, error: routeFetchError } = await supabase
           .from("routes")
-          .update({ available_seats: (prev: number) => prev - 1 })
-          .eq("id", routeId);
+          .select("available_seats")
+          .eq("id", routeId)
+          .single();
+
+        if (!routeFetchError && routeData) {
+          const newAvailableSeats = Math.max((routeData.available_seats ?? 0) - 1, 0);
+          const { error: routeUpdateError } = await supabase
+            .from("routes")
+            .update({ available_seats: newAvailableSeats })
+            .eq("id", routeId);
+
+          if (routeUpdateError) {
+            console.warn("Error decrementing available seats fallback:", routeUpdateError);
+          }
+        } else {
+          console.warn("Error fetching route for fallback seat decrement:", routeFetchError);
+        }
       }
 
       return data;

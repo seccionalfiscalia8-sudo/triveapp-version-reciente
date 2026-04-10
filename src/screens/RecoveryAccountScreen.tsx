@@ -77,7 +77,7 @@ export default function RecoveryAccountScreen() {
           </Text>
 
           <View style={styles.emptyState}>
-            <Ionicons name="phone-outline" size={40} color={COLORS.textTertiary} />
+            <Ionicons name="call-outline" size={40} color={COLORS.textTertiary} />
             <Text style={styles.emptyText}>No hay números agregados</Text>
             <TouchableOpacity style={styles.addBtn}>
               <Ionicons name="add-outline" size={20} color={COLORS.primary} />

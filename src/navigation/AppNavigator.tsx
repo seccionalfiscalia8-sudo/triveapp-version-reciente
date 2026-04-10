@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import TabNavigator from './TabNavigator'
+import LoginScreen from '../screens/LoginScreen'
 import LoginPhoneScreen from '../screens/LoginPhoneScreen'
 import RegisterScreen from '../screens/RegisterScreen'
 import SeatSelectionScreen from '../screens/SeatSelectionScreen'
@@ -12,6 +13,9 @@ import DriverPanelScreen from '../screens/DriverPanelScreen'
 import NotificationsScreen from '../screens/NotificationsScreen'
 import SettingsScreen from '../screens/SettingsScreen'
 import SecurityScreen from '../screens/SecurityScreen'
+import DriverDocumentsScreen from '../screens/DriverDocumentsScreen'
+import AdminDocumentsScreen from '../screens/AdminDocumentsScreen'
+import DriverOnboardingScreen from '../screens/DriverOnboardingScreen'
 import SessionHistoryScreen from '../screens/SessionHistoryScreen'
 import RecoveryAccountScreen from '../screens/RecoveryAccountScreen'
 import RecentActivityScreen from '../screens/RecentActivityScreen'
@@ -22,6 +26,14 @@ import ScheduledTripsScreen from '../screens/ScheduledTripsScreen'
 import GroupTripsScreen from '../screens/GroupTripsScreen'
 import FavoriteRoutesScreen from '../screens/FavoriteRoutesScreen'
 import TripHistoryScreen from '../screens/TripHistoryScreen'
+import { VehicleInfoScreen } from '../screens/VehicleInfoScreen'
+import { EditVehicleScreen } from '../screens/EditVehicleScreen'
+import { EarningsScreen } from '../screens/EarningsScreen'
+import { StatsScreen } from '../screens/StatsScreen'
+import AboutTriveScreen from '../screens/AboutTriveScreen'
+import TermsOfServiceScreen from '../screens/TermsOfServiceScreen'
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen'
+import SupportScreen from '../screens/SupportScreen'
 import { useAppStore } from '../store/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 
@@ -60,7 +72,8 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isUserAuthenticated && (
           <>
-            <Stack.Screen name="Login" component={LoginPhoneScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="LoginPhone" component={LoginPhoneScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
           </>
         )}
@@ -74,6 +87,9 @@ export default function AppNavigator() {
             <Stack.Screen name="TripStatus" component={TripStatusScreen} />
             <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
             <Stack.Screen name="DriverPanel" component={DriverPanelScreen} />
+            <Stack.Screen name="DriverOnboarding" component={DriverOnboardingScreen} />
+            <Stack.Screen name="DriverDocuments" component={DriverDocumentsScreen} />
+            <Stack.Screen name="AdminDocuments" component={AdminDocumentsScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="Privacy" component={PrivacyScreen} />
@@ -85,6 +101,14 @@ export default function AppNavigator() {
             <Stack.Screen name="GroupTrips" component={GroupTripsScreen} />
             <Stack.Screen name="FavoriteRoutes" component={FavoriteRoutesScreen} />
             <Stack.Screen name="TripHistory" component={TripHistoryScreen} />
+            <Stack.Screen name="VehicleInfo" component={VehicleInfoScreen} />
+            <Stack.Screen name="EditVehicle" component={EditVehicleScreen} />
+            <Stack.Screen name="Earnings" component={EarningsScreen} />
+            <Stack.Screen name="Stats" component={StatsScreen} />
+            <Stack.Screen name="AboutTrive" component={AboutTriveScreen} />
+            <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
+            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+            <Stack.Screen name="Support" component={SupportScreen} />
           </>
         )}
       </Stack.Navigator>

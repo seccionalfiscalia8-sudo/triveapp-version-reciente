@@ -1,53 +1,60 @@
-import { useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native'
+import { useState, useEffect } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
-
-// Mock data - historial de viajes completados
-const tripHistory = [
-  {
-    id: '1',
-    origin: 'Cali',
-    destination: 'Puerto Tejada',
-    date: '2026-04-03',
-    time: '14:30',
-    seats: 2,
-    price: 11000,
-    status: 'completed',
-    rating: 5,
-    driver: 'Juan R.',
-  },
-  {
-    id: '2',
-    origin: 'Jamundí',
-    destination: 'Cali',
-    date: '2026-04-01',
-    time: '08:00',
-    seats: 1,
-    price: 4200,
-    status: 'completed',
-    rating: 4,
-    driver: 'María P.',
-  },
-  {
-    id: '3',
-    origin: 'Cali',
-    destination: 'Yumbo',
-    date: '2026-03-28',
-    time: '17:00',
-    seats: 1,
-    price: 6000,
-    status: 'cancelled',
-    rating: null,
-    driver: 'Carlos M.',
-  },
-]
+import { useAppStore } from '../store/useAppStore'
+import { useBookings } from '../hooks/useBookings'
+import RatingModal from '../components/RatingModal'
+import { createReview } from '../services/reviews'
+import Toast from '../components/Toast'
 
 export default function TripHistoryScreen() {
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
+  const { user } = useAppStore()
+  const { getPassengerBookings, loading } = useBookings()
   const [filter, setFilter] = useState<'all' | 'completed' | 'cancelled'>('all')
+  const [tripHistory, setTripHistory] = useState<any[]>([])
+  const [ratingModalVisible, setRatingModalVisible] = useState(false)
+  const [selectedTrip, setSelectedTrip] = useState<any | null>(null)
+  const [toastConfig, setToastConfig] = useState({
+    visible: false,
+    message: '',
+    type: 'info' as 'success' | 'error' | 'info' | 'warning',
+  })
+
+  useEffect(() => {
+    if (!user) return
+    loadTripHistory()
+  }, [user])
+
+  const loadTripHistory = async () => {
+    try {
+      const bookings = await getPassengerBookings(user!.id)
+      const formatted = bookings.map((booking: any) => {
+        const route = booking.routes || {}
+        return {
+          id: booking.id,
+          origin: route.origin || 'Origen desconocido',
+          destination: route.destination || 'Destino desconocido',
+          date: route.departure_time ? new Date(route.departure_time).toISOString().split('T')[0] : '',
+          time: route.departure_time
+            ? new Date(route.departure_time).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+            : '00:00',
+          seats: booking.seat_number ? 1 : 0,
+          price: booking.price || route.price_per_seat || 0,
+          status: booking.booking_status || 'confirmed',
+          rating: route.driver_rating || null,
+          driver: route.driver_name || 'Conductor',
+        }
+      })
+      setTripHistory(formatted)
+    } catch (err) {
+      console.error('Error loading trip history:', err)
+      setTripHistory([])
+    }
+  }
 
   const filteredTrips = tripHistory.filter((trip) => {
     if (filter === 'all') return true
@@ -65,14 +72,46 @@ export default function TripHistoryScreen() {
     })
   }
 
-  const handleRateTrip = (tripId: string) => {
-    Alert.alert('Calificar viaje', '¿Cómo fue tu viaje?', [
-      { text: '1', onPress: () => {} },
-      { text: '2', onPress: () => {} },
-      { text: '3', onPress: () => {} },
-      { text: '4', onPress: () => {} },
-      { text: '5', onPress: () => {} },
-    ])
+  const handleRateTrip = (trip: any) => {
+    setSelectedTrip(trip)
+    setRatingModalVisible(true)
+  }
+
+  const handleRatingSubmit = async (rating: number, comment: string) => {
+    if (!selectedTrip || !user) return
+
+    try {
+      const success = await createReview(
+        selectedTrip.id,
+        user.id,
+        selectedTrip.driver_id || user.id, // fallback to user.id if driver_id not available
+        rating,
+        comment || undefined
+      )
+
+      if (success) {
+        setToastConfig({
+          visible: true,
+          message: `✓ Viaje calificado con ${rating} estrellas`,
+          type: 'success',
+        })
+
+        // Update the trip in local state to reflect rating
+        setTripHistory(prev => prev.map(t => 
+          t.id === selectedTrip.id ? { ...t, rating } : t
+        ))
+
+        setRatingModalVisible(false)
+        setSelectedTrip(null)
+      }
+    } catch (error) {
+      console.error('Error submitting rating:', error)
+      setToastConfig({
+        visible: true,
+        message: 'Error al enviar calificación',
+        type: 'error',
+      })
+    }
   }
 
   return (
@@ -104,7 +143,11 @@ export default function TripHistoryScreen() {
           ))}
         </View>
 
-        {filteredTrips.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : filteredTrips.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconWrapper}>
               <Ionicons name="receipt-outline" size={64} color={COLORS.textTertiary} />
@@ -119,7 +162,7 @@ export default function TripHistoryScreen() {
             </Text>
             <TouchableOpacity
               style={styles.searchBtn}
-              onPress={() => navigation.navigate('Search' as never)}
+              onPress={() => navigation.navigate('Main' as never, { screen: 'Search' } as never)}
             >
               <Ionicons name="search" size={20} color={COLORS.textInverse} />
               <Text style={styles.searchBtnText}>Buscar rutas</Text>
@@ -197,7 +240,7 @@ export default function TripHistoryScreen() {
                     {!trip.rating && (
                       <TouchableOpacity
                         style={styles.rateBtn}
-                        onPress={() => handleRateTrip(trip.id)}
+                        onPress={() => handleRateTrip(trip)}
                       >
                         <Ionicons name="star-outline" size={16} color={COLORS.primary} />
                         <Text style={styles.rateBtnText}>Calificar</Text>
@@ -218,6 +261,24 @@ export default function TripHistoryScreen() {
           </View>
         )}
       </ScrollView>
+
+      <RatingModal
+        visible={ratingModalVisible}
+        userName={selectedTrip?.driver || 'Conductor'}
+        onClose={() => {
+          setRatingModalVisible(false)
+          setSelectedTrip(null)
+        }}
+        onSubmit={handleRatingSubmit}
+        isDriver={true}
+      />
+
+      <Toast
+        visible={toastConfig.visible}
+        message={toastConfig.message}
+        type={toastConfig.type}
+        onHide={() => setToastConfig({ ...toastConfig, visible: false })}
+      />
     </SafeAreaView>
   )
 }
@@ -284,6 +345,12 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.xxxl,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.lg,
   },
   emptyContainer: {
     flex: 1,

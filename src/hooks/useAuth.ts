@@ -1,26 +1,96 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../services/supabase";
 import { Session, User } from "@supabase/supabase-js";
+import { useAppStore } from "../store/useAppStore";
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { setUser: setAppUser, setAuthUser } = useAppStore();
+
+  const restoreSession = async (currentSession: Session | null) => {
+    setSession(currentSession);
+    setAuthUser(currentSession?.user ?? null);
+    setUser(currentSession?.user ?? null);
+
+    if (!currentSession?.user) {
+      setAppUser(null);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentSession.user.id)
+        .maybeSingle();
+
+      if (profileError && profileError.code !== "PGRST116") {
+        throw profileError;
+      }
+
+      if (profile) {
+        setAppUser({
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          phone: profile.phone,
+          role: profile.role,
+          rating: profile.rating,
+          avatar_url: profile.avatar_url,
+        });
+      } else {
+        const userName = currentSession.user.user_metadata?.full_name || "Usuario";
+        const userEmail = currentSession.user.email || `${currentSession.user.id}@trive.local`;
+        const userPhone = currentSession.user.phone || currentSession.user.user_metadata?.phone || undefined;
+
+        const { data: insertedProfile, error: insertError } = await supabase
+          .from("profiles")
+          .insert([
+            {
+              id: currentSession.user.id,
+              name: userName,
+              email: userEmail,
+              phone: userPhone,
+              role: "passenger",
+              rating: 0,
+            },
+          ])
+          .select()
+          .single();
+
+        if (insertError) {
+          throw insertError;
+        }
+
+        setAppUser({
+          id: insertedProfile.id,
+          name: insertedProfile.name,
+          email: insertedProfile.email,
+          phone: insertedProfile.phone,
+          role: insertedProfile.role,
+          rating: insertedProfile.rating,
+          avatar_url: insertedProfile.avatar_url,
+        });
+      }
+    } catch (err: any) {
+      console.error("Error restoring profile from session:", err);
+      setAppUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Check if user is already signed in
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      restoreSession(session);
     });
 
-    // Listen for auth changes
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      restoreSession(session);
     });
 
     return () => {
@@ -98,6 +168,34 @@ export const useAuth = () => {
     }
   };
 
+  const signInWithApple = async () => {
+    try {
+      setError(null)
+      setLoading(true)
+      throw new Error('Apple sign-in no está implementado')
+    } catch (err: any) {
+      const message = err.message || 'Error de inicio de sesión con Apple'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    try {
+      setError(null)
+      setLoading(true)
+      throw new Error('Google sign-in no está implementado')
+    } catch (err: any) {
+      const message = err.message || 'Error de inicio de sesión con Google'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const register = async (
     email: string,
     password: string,
@@ -153,6 +251,8 @@ export const useAuth = () => {
       // Limpiar el estado después del logout exitoso
       setSession(null);
       setUser(null);
+      setAuthUser(null);
+      setAppUser(null);
     } catch (err: any) {
       const message = err.message || "Error logging out";
       setError(message);
@@ -173,6 +273,8 @@ export const useAuth = () => {
     logout,
     signInWithOTP,
     verifyOTP,
+    signInWithApple,
+    handleGoogleLogin,
     isAuthenticated: !!session,
   };
 };

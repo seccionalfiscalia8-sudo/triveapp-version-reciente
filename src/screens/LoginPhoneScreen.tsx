@@ -322,6 +322,12 @@ export default function LoginPhoneScreen() {
           </View>
 
           {/* Footer */}
+          <View style={styles.footer}> 
+            <TouchableOpacity onPress={() => navigation.navigate('Login' as never)} disabled={isSubmitting}>
+              <Text style={styles.footerLink}>Ingresar con correo</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿No tienes cuenta? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register' as never)} disabled={isSubmitting}>

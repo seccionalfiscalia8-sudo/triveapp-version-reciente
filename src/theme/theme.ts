@@ -107,6 +107,28 @@ export const TYPOGRAPHY = {
     fontWeight: '500' as any,
     lineHeight: 20,
   },
+  size: {
+    xs: 12,
+    sm: 14,
+    md: 16,
+    lg: 18,
+    xl: 20,
+  },
+  weight: {
+    regular: '400' as any,
+    medium: '500' as any,
+    semibold: '600' as any,
+    bold: '700' as any,
+  },
+  bold: {
+    fontWeight: '700' as const,
+  },
+  regular: {
+    fontWeight: '400' as const,
+  },
+  semibold: {
+    fontWeight: '600' as const,
+  },
 }
 
 export const SPACING = {

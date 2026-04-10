@@ -259,7 +259,7 @@ export default function PrivacyScreen() {
 
         {/* Info Footer */}
         <View style={styles.footer}>
-          <Ionicons name="info-circle-outline" size={16} color={COLORS.textTertiary} />
+          <Ionicons name="information-circle-outline" size={16} color={COLORS.textTertiary} />
           <Text style={styles.footerText}>
             Tu privacidad es importante. Puedes cambiar estas configuraciones en cualquier momento.
           </Text>

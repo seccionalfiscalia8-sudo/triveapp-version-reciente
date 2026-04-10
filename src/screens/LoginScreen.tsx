@@ -49,7 +49,7 @@ export default function LoginScreen() {
     if (!validate()) return
     try {
       setIsSubmitting(true)
-      const data = await login(email.trim(), password)
+      const data = (await login(email.trim(), password)) as any
       if (data?.user) {
         const { data: profile } = await (await import('../services/supabase')).supabase
           .from('profiles')
@@ -89,7 +89,7 @@ export default function LoginScreen() {
   const handleAppleLoginPress = async () => {
     try {
       setSocialLoading(true)
-      const data = await signInWithApple()
+      const data = (await signInWithApple()) as any
       if (data?.user) {
         const { data: profile } = await (await import('../services/supabase')).supabase
           .from('profiles')
@@ -276,6 +276,12 @@ export default function LoginScreen() {
           </View>
 
           {/* Footer */}
+          <View style={styles.footer}>
+            <TouchableOpacity onPress={() => navigation.navigate('LoginPhone' as never)} disabled={isSubmitting}>
+              <Text style={styles.footerLink}>Ingresar con teléfono</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿No tienes cuenta? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register' as never)} disabled={isSubmitting}>

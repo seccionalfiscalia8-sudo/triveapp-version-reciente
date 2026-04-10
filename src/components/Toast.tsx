@@ -105,7 +105,7 @@ export default function Toast({
       iconColor: '#fff',
       accentColor: '#fff',
     },
-  }
+  } as const
 
   const cfg = config[type]
 

@@ -674,6 +674,9 @@ const styles = StyleSheet.create({
   selectionTitleActive: {
     color: COLORS.textPrimary,
   },
+  selectionSubtitleActive: {
+    color: COLORS.textPrimary,
+  },
   selectionSubtitle: {
     ...TYPOGRAPHY.labelMedium,
     color: COLORS.textSecondary,

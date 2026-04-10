@@ -10,14 +10,18 @@ import { useBookings } from '../hooks/useBookings'
 import Toast from '../components/Toast'
 
 export default function ScheduledTripsScreen() {
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
   const { user } = useAppStore()
   const { getPassengerBookings, cancelBooking, loading: bookingsLoading } = useBookings()
   const [trips, setTrips] = useState<any[]>([])
   const [selectedTrip, setSelectedTrip] = useState<any>(null)
   const [modalVisible, setModalVisible] = useState(false)
   const [cancellationLoading, setCancellationLoading] = useState(false)
-  const [toastConfig, setToastConfig] = useState({ visible: false, message: '', type: 'info' as const })
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean
+    message: string
+    type: 'success' | 'error' | 'info' | 'warning'
+  }>({ visible: false, message: '', type: 'info' })
 
   useEffect(() => {
     loadPassengerBookings()
@@ -887,7 +891,6 @@ const styles = StyleSheet.create({
   routeFooter: {
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.2)',
-    paddingTopVertical: SPACING.md,
     paddingTop: SPACING.md,
     marginTop: SPACING.sm,
   },

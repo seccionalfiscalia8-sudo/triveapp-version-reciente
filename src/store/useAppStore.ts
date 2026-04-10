@@ -6,9 +6,10 @@ export interface AppUser {
   name: string
   email: string
   phone?: string
-  role: 'passenger' | 'driver'
+  role: 'passenger' | 'driver' | 'support'
   rating: number
   avatar_url?: string
+  is_admin?: boolean
 }
 
 interface AppState {

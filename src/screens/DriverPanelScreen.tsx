@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { supabase } from '../services/supabase'
+import { checkDriverApprovalStatus, getDriverRestrictionMessage, type DriverApprovalStatus } from '../services/driverApproval'
 
 interface Passenger {
   id: string
@@ -51,6 +52,8 @@ export default function DriverPanelScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [updatingRouteId, setUpdatingRouteId] = useState<string | null>(null)
+  const [approvalStatus, setApprovalStatus] = useState<DriverApprovalStatus | null>(null)
+  const [checkingApproval, setCheckingApproval] = useState(true)
 
   const fetchDriverRoutes = useCallback(async () => {
     if (!user?.id) return
@@ -99,6 +102,21 @@ export default function DriverPanelScreen() {
     fetchDriverRoutes()
   }, [fetchDriverRoutes])
 
+  useEffect(() => {
+    const checkApprovalStatus = async () => {
+      if (!user?.id) {
+        setCheckingApproval(false)
+        return
+      }
+
+      const status = await checkDriverApprovalStatus(user.id)
+      setApprovalStatus(status)
+      setCheckingApproval(false)
+    }
+
+    checkApprovalStatus()
+  }, [user?.id])
+
   const onRefresh = () => {
     setRefreshing(true)
     fetchDriverRoutes()
@@ -139,6 +157,27 @@ export default function DriverPanelScreen() {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+  }
+
+  const handleCreateRoute = () => {
+    if (!approvalStatus) {
+      Alert.alert('Error', 'Verificando estado de aprobación...')
+      return
+    }
+
+    if (!approvalStatus.canCreateRoutes) {
+      const message = getDriverRestrictionMessage(approvalStatus)
+      Alert.alert('No puedes crear rutas', message, [
+        {
+          text: 'Ver documentos',
+          onPress: () => navigation.navigate('DriverDocuments' as never),
+        },
+        { text: 'Cerrar', style: 'cancel' },
+      ])
+      return
+    }
+
+    navigation.navigate('CreateRoute' as never)
   }
 
   const getSeatsFilled = (route: DriverRoute) => {
@@ -210,13 +249,32 @@ export default function DriverPanelScreen() {
             <Text style={styles.emptyText}>
               Crea una ruta para empezar a recibir pasajeros
             </Text>
-            <TouchableOpacity
-              style={styles.createRouteBtn}
-              onPress={() => navigation.navigate('DriverRegister' as never)}
-            >
-              <Ionicons name="add-circle-outline" size={20} color={COLORS.textInverse} />
-              <Text style={styles.createRouteBtnText}>Crear nueva ruta</Text>
-            </TouchableOpacity>
+            {checkingApproval ? (
+              <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: SPACING.lg }} />
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[
+                    styles.createRouteBtn,
+                    !approvalStatus?.canCreateRoutes && styles.createRouteBtnDisabled,
+                  ]}
+                  onPress={handleCreateRoute}
+                  disabled={!approvalStatus?.canCreateRoutes}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color={!approvalStatus?.canCreateRoutes ? COLORS.textTertiary : COLORS.textInverse} />
+                  <Text style={[styles.createRouteBtnText, !approvalStatus?.canCreateRoutes && styles.createRouteBtnTextDisabled]}>
+                    Crear nueva ruta
+                  </Text>
+                </TouchableOpacity>
+                {!approvalStatus?.canCreateRoutes && approvalStatus && (
+                  <Text style={styles.documentsPendingText}>
+                    {approvalStatus.pendingDocuments.length > 0
+                      ? `Doctos. pendientes: ${approvalStatus.pendingDocuments.join(', ')}`
+                      : 'Verifica tu estado'}
+                  </Text>
+                )}
+              </>
+            )}
           </View>
         ) : (
           routes.map((route) => {
@@ -508,6 +566,19 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textInverse,
     fontWeight: '600',
+  },
+  createRouteBtnDisabled: {
+    backgroundColor: COLORS.surfaceAlt,
+    opacity: 0.6,
+  },
+  createRouteBtnTextDisabled: {
+    color: COLORS.textTertiary,
+  },
+  documentsPendingText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: COLORS.warning,
+    textAlign: 'center',
+    marginTop: SPACING.md,
   },
 
   // Route Card

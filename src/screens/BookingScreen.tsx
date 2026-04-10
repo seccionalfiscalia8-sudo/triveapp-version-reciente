@@ -18,7 +18,7 @@ import { useNotifications } from '../hooks/useNotifications'
 import Toast from '../components/Toast'
 
 export default function BookingScreen() {
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
   const { selectedRoute, bookingData, user, authUser } = useAppStore()
   const { createBooking, loading } = useBookings()
   const { createNotification } = useNotifications(authUser?.id)

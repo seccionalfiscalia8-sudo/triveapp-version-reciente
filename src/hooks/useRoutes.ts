@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../services/supabase";
+import { checkDriverApprovalStatus } from "../services/driverApproval";
 
 export interface Route {
   id: string;
@@ -86,6 +87,26 @@ export const useRoutes = () => {
   const createRoute = async (routeData: Omit<Route, "id" | "created_at" | "updated_at">) => {
     try {
       setError(null);
+
+      // Validate driver approval status
+      const driverId = routeData.driver_id;
+      const approvalStatus = await checkDriverApprovalStatus(driverId);
+
+      if (!approvalStatus.canCreateRoutes) {
+        let errorMsg = 'No puedes crear rutas. ';
+        
+        if (!approvalStatus.isDriver) {
+          errorMsg += 'Solo los conductores pueden crear rutas.';
+        } else if (!approvalStatus.isVerified) {
+          errorMsg += 'Tu cuenta de conductor aún no ha sido verificada.';
+        } else if (approvalStatus.pendingDocuments.length > 0) {
+          errorMsg += `Faltan documentos por aprobar: ${approvalStatus.pendingDocuments.join(', ')}`;
+        }
+
+        throw new Error(errorMsg);
+      }
+
+      // Create the route
       const { data, error } = await supabase
         .from("routes")
         .insert([routeData])

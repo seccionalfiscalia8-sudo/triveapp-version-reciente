@@ -28,7 +28,7 @@ const favoriteRoutes = [
 ]
 
 export default function FavoriteRoutesScreen() {
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
 
   const handleRemoveFavorite = (routeId: string, origin: string, destination: string) => {
     Alert.alert(

@@ -1,25 +1,31 @@
 import { useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import * as ImagePicker from 'expo-image-picker'
 import { useNavigation } from '@react-navigation/native'
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../theme/theme'
 import { useAppStore } from '../store/useAppStore'
 import { useProfile } from '../hooks/useProfile'
 import { useAuth } from '../hooks/useAuth'
 import Toast from '../components/Toast'
+import { uploadProfilePhoto, uploadVehiclePhoto } from '../services/photoUpload'
 
 export default function ProfileScreen() {
   const navigation = useNavigation()
   const { user, logout: logoutStore } = useAppStore()
   const { logout: logoutAuth } = useAuth()
-  const { profile, loading, switchRole } = useProfile(user?.id)
+  const { profile, loading, switchRole, fetchProfile } = useProfile(user?.id)
   const [isDriver, setIsDriver] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [uploadingVehiclePhoto, setUploadingVehiclePhoto] = useState(false)
+  const [vehiclePhotoError, setVehiclePhotoError] = useState(false)
   const [shouldLogout, setShouldLogout] = useState(false)
   const [toastVisible, setToastVisible] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success')
+  const [vehiclePhotoUrl, setVehiclePhotoUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (profile?.role) {
@@ -40,8 +46,15 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'No se pudo identificar tu cuenta')
       return
     }
+    
     // Prevenir cambios múltiples simultáneos
     if (isLoading) return
+
+    // If switching to driver, show onboarding first
+    if (newRole === 'driver' && !isDriver) {
+      navigation.navigate('DriverOnboarding' as never)
+      return
+    }
     
     try {
       setIsLoading(true)
@@ -49,6 +62,11 @@ export default function ProfileScreen() {
       if (result) {
         // Actualizar estado local inmediatamente
         setIsDriver(result.role === 'driver')
+        
+        // Show success message
+        setToastMessage(`Ahora eres ${newRole === 'driver' ? 'conductor' : 'pasajero'}`)
+        setToastType('success')
+        setToastVisible(true)
       }
     } catch (error) {
       Alert.alert('Error', 'No se pudo cambiar el rol. Intenta de nuevo.')
@@ -110,6 +128,103 @@ export default function ProfileScreen() {
     }
   }
 
+  const handleProfilePhotoUpload = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'] as any,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets[0] && user?.id) {
+        setUploadingPhoto(true)
+        const photoUrl = await uploadProfilePhoto(user.id, result.assets[0].uri)
+        
+        // Refresh profile
+        await fetchProfile(user.id)
+        
+        setToastMessage('Foto de perfil actualizada')
+        setToastType('success')
+        setToastVisible(true)
+      }
+    } catch (error: any) {
+      console.error('Error uploading photo:', error)
+      setToastMessage(error.message || 'Error al subir la foto')
+      setToastType('error')
+      setToastVisible(true)
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
+  const handleVehiclePhotoUpload = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'] as any,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets[0] && user?.id) {
+        setUploadingVehiclePhoto(true)
+        try {
+          const photoUrl = await uploadVehiclePhoto(user.id, null, result.assets[0].uri)
+          console.log('Received vehicle photo URL:', photoUrl)
+          setVehiclePhotoUrl(photoUrl)
+          
+          setToastMessage('Foto del vehículo actualizada')
+          setToastType('success')
+          setToastVisible(true)
+        } finally {
+          setUploadingVehiclePhoto(false)
+        }
+      }
+    } catch (error: any) {
+      console.error('Error uploading vehicle photo:', error)
+      setToastMessage(error.message || 'Error al subir la foto')
+      setToastType('error')
+      setToastVisible(true)
+    } finally {
+      setUploadingVehiclePhoto(false)
+    }
+  }
+
+  const showPhotoOptions = () => {
+    Alert.alert(
+      'Foto de Perfil',
+      '¿Qué deseas hacer?',
+      [
+        {
+          text: 'Cambiar foto',
+          onPress: handleProfilePhotoUpload,
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ]
+    )
+  }
+
+  const showVehiclePhotoOptions = () => {
+    Alert.alert(
+      'Foto del Vehículo',
+      '¿Qué deseas hacer?',
+      [
+        {
+          text: 'Cargar foto',
+          onPress: handleVehiclePhotoUpload,
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ]
+    )
+  }
+
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -126,11 +241,36 @@ export default function ProfileScreen() {
 
       <View style={styles.headerContent}>
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(user?.name || 'U').charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            onPress={showPhotoOptions}
+            disabled={uploadingPhoto}
+          >
+            {uploadingPhoto ? (
+              <ActivityIndicator size="large" color={COLORS.primary} />
+            ) : (user?.avatar_url || profile?.avatar_url) ? (
+              <>
+                <Image 
+                  source={{ uri: user?.avatar_url || profile?.avatar_url }}
+                  style={styles.avatarImage}
+                />
+                <View style={styles.avatarEditBadge}>
+                  <Ionicons name="camera" size={16} color={COLORS.textInverse} />
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {(user?.name || 'U').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.avatarEditBadge}>
+                  <Ionicons name="camera" size={16} color={COLORS.textInverse} />
+                </View>
+              </>
+            )}
+          </TouchableOpacity>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.name || 'Usuario'}</Text>
             <Text style={styles.profileEmail}>{user?.email || ''}</Text>
@@ -143,16 +283,17 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.modeSelectorContainer}>
+          <Text style={styles.modeSelectorLabel}>Mi Rol</Text>
           <View style={styles.modeSelector}>
             <TouchableOpacity
               style={[styles.modeBtn, !isDriver ? styles.modeBtnActive : styles.modeBtnInactive]}
               onPress={() => handleRoleSwitch('passenger')}
               disabled={isLoading}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <Ionicons
                 name={!isDriver ? 'person' : 'person-outline'}
-                size={18}
+                size={22}
                 color={!isDriver ? COLORS.textInverse : COLORS.textSecondary}
               />
               <Text style={[styles.modeBtnText, !isDriver && styles.modeBtnTextActive]}>
@@ -164,11 +305,11 @@ export default function ProfileScreen() {
               style={[styles.modeBtn, isDriver ? styles.modeBtnActive : styles.modeBtnInactive]}
               onPress={() => handleRoleSwitch('driver')}
               disabled={isLoading}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <Ionicons
                 name={isDriver ? 'car' : 'car-outline'}
-                size={18}
+                size={22}
                 color={isDriver ? COLORS.textInverse : COLORS.textSecondary}
               />
               <Text style={[styles.modeBtnText, isDriver && styles.modeBtnTextActive]}>
@@ -266,22 +407,57 @@ export default function ProfileScreen() {
         </View>
       ) : (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tu Vehículo</Text>
-
-          <View style={styles.vehicleCard}>
-            <View style={styles.vehicleImage}>
-              <Ionicons name="car" size={40} color={COLORS.textSecondary} />
-            </View>
-            <View style={styles.vehicleInfo}>
-              <Text style={styles.vehicleName}>Sin vehículo registrado</Text>
-              <Text style={styles.vehicleSubtitle}>Agrega tu vehículo para comenzar</Text>
-            </View>
-          </View>
+          <TouchableOpacity 
+            style={styles.vehiclePhotoContainer}
+            onPress={showVehiclePhotoOptions}
+            disabled={uploadingVehiclePhoto}
+            activeOpacity={0.8}
+          >
+            {uploadingVehiclePhoto ? (
+              <View style={styles.vehiclePhotoLoading}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+              </View>
+            ) : vehiclePhotoUrl ? (
+              <>
+                <Image 
+                  source={{ uri: vehiclePhotoUrl }}
+                  style={styles.vehiclePhotoImage}
+                  onError={(error) => {
+                    console.error('Vehicle photo load error:', error)
+                    setVehiclePhotoError(true)
+                  }}
+                  onLoad={() => {
+                    console.log('Vehicle photo loaded:', vehiclePhotoUrl)
+                    setVehiclePhotoError(false)
+                  }}
+                />
+                {vehiclePhotoError && (
+                  <View style={styles.vehiclePhotoError}>
+                    <Ionicons name="warning" size={32} color={COLORS.error} />
+                    <Text style={styles.vehiclePhotoErrorText}>No se pudo cargar</Text>
+                  </View>
+                )}
+                <View style={styles.vehiclePhotoBadge}>
+                  <Ionicons name="camera" size={24} color={COLORS.textInverse} />
+                </View>
+              </>
+            ) : (
+              <View style={styles.vehiclePhotoEmpty}>
+                <Ionicons name="car" size={56} color={COLORS.primary} />
+                <Text style={styles.vehiclePhotoEmptyText}>Cargar foto del vehículo</Text>
+                <Text style={styles.vehiclePhotoEmptySubtext}>Toca para seleccionar</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           <Text style={styles.sectionTitle}>Conductor</Text>
 
           <View style={styles.menuCard}>
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('VehicleInfo' as never)}
+              activeOpacity={0.8}
+            >
               <View style={styles.menuIcon}>
                 <Ionicons name="car-outline" size={20} color={COLORS.primary} />
               </View>
@@ -289,17 +465,23 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('DriverDocuments' as never)}
+              activeOpacity={0.8}
+            >
               <View style={styles.menuIcon}>
                 <Ionicons name="document-text-outline" size={20} color={COLORS.primary} />
               </View>
               <Text style={styles.menuText}>Documentos</Text>
-              <View style={styles.pendingBadge}>
-                <Text style={styles.pendingText}>Pendiente</Text>
-              </View>
+              <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('Earnings' as never)}
+              activeOpacity={0.8}
+            >
               <View style={styles.menuIcon}>
                 <Ionicons name="wallet-outline" size={20} color={COLORS.primary} />
               </View>
@@ -307,7 +489,11 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} style={styles.menuChevron} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]}>
+            <TouchableOpacity 
+              style={[styles.menuItem, styles.menuItemLast]}
+              onPress={() => navigation.navigate('Stats' as never)}
+              activeOpacity={0.8}
+            >
               <View style={styles.menuIcon}>
                 <Ionicons name="stats-chart-outline" size={20} color={COLORS.primary} />
               </View>
@@ -335,6 +521,17 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </TouchableOpacity>
         </View>
+      )}
+
+      {profile?.role === 'support' && (
+        <TouchableOpacity
+          style={styles.adminBtn}
+          onPress={() => navigation.navigate('AdminDocuments' as never)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
+          <Text style={styles.adminBtnText}>Verificar Documentos</Text>
+        </TouchableOpacity>
       )}
 
       <TouchableOpacity
@@ -416,6 +613,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...SHADOWS.lg,
   },
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.lg,
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: RADIUS.full,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
   avatarText: {
     fontSize: 32,
     fontWeight: '700',
@@ -452,38 +677,45 @@ const styles = StyleSheet.create({
   modeSelectorContainer: {
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.xl,
+    gap: SPACING.md,
+  },
+  modeSelectorLabel: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.sm,
   },
   modeSelector: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.sm,
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   modeBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.md,
-    gap: SPACING.sm,
-    ...SHADOWS.xs,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    gap: SPACING.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    ...SHADOWS.sm,
   },
   modeBtnInactive: {
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.borderLight,
   },
   modeBtnActive: {
     backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
     ...SHADOWS.md,
   },
   modeBtnText: {
     ...TYPOGRAPHY.bodyMedium,
+    fontWeight: '600',
     color: COLORS.textSecondary,
   },
   modeBtnTextActive: {
     color: COLORS.textInverse,
-    fontWeight: '600',
   },
   
   // Loading
@@ -577,7 +809,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.md,
     marginBottom: SPACING.xl,
     borderWidth: 2,
     borderColor: COLORS.primary + '20',
@@ -611,7 +842,80 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   
-  // Vehicle Card
+  // Vehicle Photo Container
+  vehiclePhotoContainer: {
+    width: '100%',
+    height: 280,
+    borderRadius: RADIUS.xl,
+    backgroundColor: COLORS.surface,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...SHADOWS.md,
+    position: 'relative',
+  },
+  vehiclePhotoImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  vehiclePhotoLoading: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  vehiclePhotoEmpty: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceAlt,
+    gap: SPACING.md,
+  },
+  vehiclePhotoEmptyText: {
+    ...TYPOGRAPHY.h4,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  vehiclePhotoEmptySubtext: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  vehiclePhotoError: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceAlt,
+    gap: SPACING.md,
+  },
+  vehiclePhotoErrorText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.error,
+  },
+  vehiclePhotoBadge: {
+    position: 'absolute',
+    bottom: SPACING.lg,
+    right: SPACING.lg,
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.surface,
+    ...SHADOWS.lg,
+  },
+  
+  // Old Vehicle Card (backup)
   vehicleCard: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
@@ -631,6 +935,31 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  vehicleImageContent: {
+    width: 72,
+    height: 72,
+    borderRadius: RADIUS.md,
+  },
+  vehicleImageText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+  },
+  vehicleEditBadge: {
+    position: 'absolute',
+    bottom: -8,
+    right: -8,
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+    ...SHADOWS.md,
   },
   vehicleInfo: {
     flex: 1,
@@ -695,7 +1024,26 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyMedium,
     fontWeight: '600',
   },
-  
+
+  adminBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.md,
+    paddingVertical: SPACING.lg,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary + '15',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '40',
+  },
+  adminBtnText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
